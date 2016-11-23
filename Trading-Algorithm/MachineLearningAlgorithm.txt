@@ -1,0 +1,50 @@
+﻿from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+
+def initialize(context):
+   context.security = sid(8554)#SPY
+   context.model = RandomForestRegressor()
+
+   context.lookback = 3 
+   context.history_range = 400
+
+   #Generate weekly model
+   schedule_function(create_model, date_rules.week_end(), time_rules.market_close(minutes=10))
+
+   #Trade everyday
+   schedule_function(trade, date_rules.every_day(), time_rules.market_open(minutes=1))
+
+def create_model(context, data):
+   #get daily prices
+   recent_prices = data.history(context.security, 'price', context.history_range, '1d').values
+   
+   #get price changes
+   price_changes = np.diff(recent_prices).tolist()
+
+   X = [] #input variable
+   Y = [] #output variable
+   
+   #for each day in defined history
+   for i in range(context.history_range-context.lookback-1):
+       X.append(price_changes[i:i+context.lookback]) #stores price changes
+       Y.append(price_changes[i+context.lookback]) #stores day of price change
+
+   context.model.fit(X, Y) #GeneratesModel
+
+def trade(context, data):
+   if context.model: #checks model was made
+       
+       #get recent prices
+       recent_prices = data.history(context.security, 'price',              context.lookback+1, '1d').values
+       
+       #get price changes
+       price_changes = np.diff(recent_prices).tolist()
+       
+       #machine makes prediction
+       prediction = context.model.predict(price_changes)
+       record(prediction = prediction)
+       
+       if prediction > 0:
+           order_target_percent(context.security, 1.0)
+       else:
+           order_target_percent(context.security, -1.0)
